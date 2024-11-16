@@ -9,11 +9,11 @@ Scraping posts from BlueSky (public API - https://public.api.bsky.app/xrpc/app.b
 
 ## How to use:
 
-* It retrieves posts using a keyword with the label `key`. Optionally, you can also specify the starting date of the post (`since`), the final date (`until`), the language of the post (`lang`), and the maximum number of posts (`max`). Examples of use 
+* It retrieves posts using a keyword with the label `key`. Optionally, you can also specify the starting date of the post (`since`), the final date (`until`), the language of the post (`lang`), and the maximum number of posts (`max`). Examples of use:
 
 ```python bluesky-scraper.py key="trump"```
 
-```python3 bluesky-scraper.py key="trump" since="2024-11-01" until="2024-11-12" lang="en" max=50```
+```python bluesky-scraper.py key="trump" since="2024-11-01" until="2024-11-12" lang="en" max=50```
 
 ## Output
 
