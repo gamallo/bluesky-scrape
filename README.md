@@ -5,6 +5,7 @@ Scraping posts from BlueSky from public API (https://bsky.social/xrpc/app.bsky.f
 ## Requeriments:
 * Python3
 * Python modules: json, requests (use `pip install`)
+* To use Bluesky's API, you'll need a Bluesky username and password. You can sign up directly on their platform: Bluesky Social (https://bsky.app/)
 
 ## How to use:
 
