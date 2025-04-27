@@ -1,17 +1,13 @@
 import requests
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# Default values
-DEFAULT_SINCE = (datetime.now().strftime("%Y-%m-%d") + "T00:00:00Z")
-DEFAULT_UNTIL = (datetime.now().strftime("%Y-%m-%d") + "T23:59:59Z")
-DEFAULT_LANG = None  # No language filter
-DEFAULT_MAX = 25     # API default limit
+BASE_URL = "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
 
 def parse_arguments():
     """
-    Parse command-line arguments for the script.
+    Parse command-line arguments into a dictionary.
     """
     arguments = {}
     for arg in sys.argv[1:]:
@@ -19,90 +15,110 @@ def parse_arguments():
         arguments[key] = value
     return arguments
 
-def format_date(date, end_of_day=False):
+def authenticate(username, password):
     """
-    Format the date to include the correct time suffix for the API.
+    Authenticate to Bluesky and get an access token.
     """
-    if "T" not in date:  # Only add the suffix if it's missing
-        return date + ("T23:59:59Z" if end_of_day else "T00:00:00Z")
-    return date
-
-def search_posts(query, since, until, sort='latest', limit=25, lang=None):
-    """
-    Perform a search query on BlueSky's public API.
-    """
-    url = 'https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts'
-    params = {
-        'q': query,
-        'since': since,
-        'until': until,
-        'sort': sort,
-        'limit': limit
+    auth_url = "https://bsky.social/xrpc/com.atproto.server.createSession"
+    data = {
+        "identifier": username,
+        "password": password
     }
-    if lang:
-        params['lang'] = lang
-
-    response = requests.get(url, params=params)
+    response = requests.post(auth_url, json=data)
     response.raise_for_status()
-    return response.json()
+    return response.json().get("accessJwt")
 
-def write_to_json(result, output_file):
+def search_posts(keyword, access_token, start_date=None, end_date=None, limit=100, lang=None):
     """
-    Save the API response to a JSON file.
+    Search for posts containing the specified keyword.
     """
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(result, f, indent=2)
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    params = {
+        "q": keyword,
+        "limit": limit
+    }
+    if start_date:
+        params["since"] = f"{start_date}T00:00:00Z"
+    if end_date:
+        params["until"] = f"{end_date}T23:59:59Z"
+    if lang:
+        params["lang"] = lang
 
-def write_text_to_file(posts, output_file):
+    response = requests.get(BASE_URL, headers=headers, params=params)
+    response.raise_for_status()
+    return response.json().get("posts", [])
+
+def save_to_file(keyword, posts):
     """
-    Write posts to a text file in TSV format.
+    Save posts to a JSON file.
     """
-    with open(output_file, 'w', encoding='utf-8') as f:
+    filename = f"{keyword.replace(' ', '_')}_results.json"
+    with open(filename, "w", encoding="utf-8") as file:
+        json.dump(posts, file, indent=4, ensure_ascii=False)
+    print(f"Saved results for '{keyword}' to {filename}")
+
+def save_text_only(keyword, posts):
+    """
+    Save only the text of posts to a plain .txt file.
+    """
+    filename = f"{keyword.replace(' ', '_')}_results.txt"
+    with open(filename, "w", encoding="utf-8") as file:
         for post in posts:
-            date = post['record']['createdAt']
-            text = remove_newlines(post['record']['text'])
-            f.write(f"{date}\t{text}\n")
+            text = post.get("record", {}).get("text", "")
+            if text:
+                file.write(text.replace("\n", " ").strip() + "\n")
+    print(f"Saved text-only results for '{keyword}' to {filename}")
 
-def remove_newlines(text):
-    """
-    Remove newline characters from the text.
-    """
-    return text.replace("\n", " ")
 
 def main():
-    # Parse command-line arguments
     args = parse_arguments()
-    
-    # Mandatory parameter
-    query = args.get("key")
-    if not query:
-        print("Error: The 'key' parameter is required.")
+
+    # Mandatory arguments
+    keyword = args.get("keyword")
+    username = args.get("user")
+    password = args.get("password")
+
+    if not all([keyword, username, password]):
+        print("Error: 'keyword', 'user', and 'password' are required parameters.")
         sys.exit(1)
 
-    # Optional parameters with defaults
-   # since = args.get("since", DEFAULT_SINCE)
-   # until = args.get("until", DEFAULT_UNTIL)
-    since = format_date(args.get("since", DEFAULT_SINCE))
-    until = format_date(args.get("until", DEFAULT_UNTIL), end_of_day=True)
-    lang = args.get("lang", DEFAULT_LANG)
-    max_limit = int(args.get("max", DEFAULT_MAX))
+    # Optional arguments
+    limit = int(args.get("limit", 100))
+    lang = args.get("lang")
 
-    # Fetch posts
+    # Dates
+    since = args.get("since")
+    until = args.get("until")
+    if not since:
+        since = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    if not until:
+        until = datetime.now().strftime("%Y-%m-%d")
+
+    # Authenticate
     try:
-        result = search_posts(query, since, until, sort='latest', limit=max_limit, lang=lang)
+        access_token = authenticate(username, password)
     except requests.exceptions.RequestException as e:
-        print(f"Error: {e}")
+        print(f"Authentication error: {e}")
         sys.exit(1)
 
-    # Write results to files
-    posts = result.get('posts', [])
-    json_output_file = f"{query.replace(' ', '_')}_output.json"
-    tsv_output_file = f"{query.replace(' ', '_')}_output.tsv"
-    
-    write_to_json(result, json_output_file)
-    write_text_to_file(posts, tsv_output_file)
+    # Search posts
+    try:
+        posts = search_posts(keyword, access_token, start_date=since, end_date=until, limit=limit, lang=lang)
+    except requests.exceptions.RequestException as e:
+        print(f"Search error: {e}")
+        sys.exit(1)
 
-    print(f"Results written to:\n- JSON: {json_output_file}\n- TSV: {tsv_output_file}")
+    for post in posts:
+        text = post.get("record", {}).get("text", "No content")
+        author = post.get("author", {}).get("displayName", "Unknown Author")
+        created_at = post.get("record", {}).get("createdAt", "Unknown Date")
+        print(f"Author: {author}\nCreated At: {created_at}\nContent: {text}\n{'-' * 40}")
+
+    # Save posts
+    save_to_file(keyword, posts)
+    save_text_only(keyword, posts)
 
 if __name__ == "__main__":
     main()
