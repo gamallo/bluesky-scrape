@@ -1,6 +1,6 @@
 # bluesky-scrape
 
-Scraping posts from BlueSky from public API (https://bsky.social/xrpc/app.bsky.feed.searchPosts) with authentification
+Scraping posts from BlueSky from public API (https://bsky.social/xrpc/app.bsky.feed.searchPosts) with authentification.
 
 ## Requeriments:
 * Python3
