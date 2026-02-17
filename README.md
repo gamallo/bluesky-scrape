@@ -1,4 +1,4 @@
-# bluesky-scrape
+# bluesky-scraping
 
 Scraping posts from BlueSky from public API (https://bsky.social/xrpc/app.bsky.feed.searchPosts) with authentification.
 
